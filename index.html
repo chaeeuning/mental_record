@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마음 쉼표 - 심리 자가진단 및 치유 앱</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script>
+        // 여기에 배포한 Google Apps Script 웹 앱 URL을 입력하세요.
+        const GAS_USER_URL = "https://script.google.com/macros/s/AKfycbwFMpXuWKj3c6pulZRXRV8M4UBY12H4azTc8G-5UkxEJjmKKnPujwd61FT2OFwj-GEg/exec"; // 1번 시트용
+        const GAS_RESULT_URL = "https://script.google.com/macros/s/AKfycbwyIRtvyE-4L31U7ATERSkJWHMR5RmgxqVIT98vzD8Y-MQ77azILHEBnbisSs49qRdn/exec"; // 2번 시트용
+
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Pretendard', 'sans-serif'] },
+                    colors: {
+                        pastel: {
+                            blue: '#E0F2FE',
+                            green: '#D1FAE5',
+                            gray: '#F8FAFC',
+                            text: '#334155',
+                            primary: '#38BDF8',
+                            primaryDark: '#0284C7',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'slide-up': 'slideUp 0.5s ease-out',
+                        'toast': 'toastSlide 3s ease-in-out forwards',
+                        'spin-slow': 'spin 2s linear infinite',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        toastSlide: {
+                            '0%': { opacity: '0', transform: 'translate(-50%, 20px)' },
+                            '10%': { opacity: '1', transform: 'translate(-50%, 0)' },
+                            '90%': { opacity: '1', transform: 'translate(-50%, 0)' },
+                            '100%': { opacity: '0', transform: 'translate(-50%, -20px)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #F8FAFC; color: #334155; -webkit-tap-highlight-color: transparent; }
+        .option-radio:checked + div { background-color: #E0F2FE; border-color: #38BDF8; font-weight: 600; }
+        #loading-overlay { backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+
+    <div id="loading-overlay" class="fixed inset-0 z-[100] bg-white/80 flex flex-col items-center justify-center">
+        <i class="ph-bold ph-spinner-gap text-4xl text-pastel-primary animate-spin-slow mb-4"></i>
+        <p class="text-slate-600 font-medium">안전하게 구글 서버와 연결 중입니다...</p>
+    </div>
+
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-100">
+        <div class="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="app.goHome()">
+                <div class="w-8 h-8 bg-pastel-blue rounded-full flex items-center justify-center text-pastel-primaryDark">
+                    <i class="ph-fill ph-leaf text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-800">마음 쉼표</h1>
+            </div>
+            <div class="flex items-center gap-3">
+                <span id="nav-user-name" class="text-sm font-semibold text-pastel-primaryDark hidden"></span>
+                <button onclick="app.logout()" id="btn-logout" class="hidden text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-full transition-colors">
+                    로그아웃
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow w-full max-w-2xl mx-auto p-4 sm:p-6 flex flex-col relative overflow-hidden">
+        
+        <div id="toast-container" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 z-[100] hidden">
+            <div class="bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg font-medium text-sm flex items-center gap-2">
+                <i class="ph-bold ph-info text-pastel-primary"></i>
+                <span id="toast-message">메시지</span>
+            </div>
+        </div>
+
+        <section id="screen-auth" class="hidden flex-grow flex-col justify-center animate-fade-in py-8">
+            <div class="text-center mb-8">
+                <div class="w-20 h-20 bg-pastel-blue rounded-full mx-auto flex items-center justify-center mb-4 shadow-sm">
+                    <i class="ph-fill ph-lock-key text-3xl text-pastel-primaryDark"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">나만의 마음 기록장</h2>
+                <p class="text-slate-500 text-sm">구글 시트 연동으로 일주일간의 마음 변화를 추적해보세요.</p>
+            </div>
+
+            <div class="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 mx-auto w-full max-w-md">
+                <div class="flex border-b border-slate-100 mb-6">
+                    <button onclick="app.setAuthMode('login')" id="tab-login" class="flex-1 pb-3 text-center font-bold text-pastel-primary border-b-2 border-pastel-primary transition-colors">로그인</button>
+                    <button onclick="app.setAuthMode('signup')" id="tab-signup" class="flex-1 pb-3 text-center font-medium text-slate-400 border-b-2 border-transparent transition-colors">회원가입</button>
+                </div>
+
+                <form id="auth-form" onsubmit="event.preventDefault(); app.submitAuth();" class="space-y-4">
+                    <div id="field-name" class="hidden">
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">이름 (닉네임)</label>
+                        <input type="text" id="auth-name" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-pastel-primary focus:ring-1 focus:ring-pastel-primary transition-all" placeholder="이름을 입력해주세요">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">아이디</label>
+                        <input type="text" id="auth-id" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-pastel-primary focus:ring-1 focus:ring-pastel-primary transition-all" placeholder="사용할 아이디">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-1">비밀번호</label>
+                        <input type="password" id="auth-pw" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:border-pastel-primary focus:ring-1 focus:ring-pastel-primary transition-all" placeholder="비밀번호">
+                    </div>
+                    
+                    <button type="submit" id="btn-auth-submit" class="w-full bg-slate-800 hover:bg-slate-700 text-white text-lg font-semibold py-4 rounded-xl transition-all mt-4 shadow-md">
+                        로그인하기
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <section id="screen-main" class="hidden flex-grow flex-col justify-center animate-fade-in py-8">
+            <div class="text-center mb-10">
+                <div class="w-32 h-32 bg-pastel-blue rounded-full mx-auto flex items-center justify-center mb-6 shadow-sm">
+                    <span class="text-6xl">☁️</span>
+                </div>
+                <h2 class="text-3xl sm:text-4xl font-bold text-slate-800 mb-4 tracking-tight"><span id="display-user-name" class="text-pastel-primaryDark"></span>님,<br>오늘 마음은 안녕하신가요?</h2>
+                <p class="text-slate-500 text-lg leading-relaxed px-4">
+                    지금 내 마음의 날씨를 확인하고,<br>
+                    따뜻한 위로와 맞춤형 해결책을 찾아보세요.
+                </p>
+            </div>
+            
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 mb-8 mx-4">
+                <div class="flex items-center gap-4 mb-4">
+                    <i class="ph-fill ph-shield-check text-2xl text-pastel-primary"></i>
+                    <h3 class="font-semibold text-slate-700">기록이 구글 시트에 보관됩니다</h3>
+                </div>
+                <p class="text-sm text-slate-500">테스트를 완료하면 내 기록이 시트에 누적되어, 일주일 동안의 감정 변화 추이를 한눈에 살펴볼 수 있습니다.</p>
+            </div>
+
+            <div class="px-4 mt-auto sm:mt-8">
+                <button onclick="app.startQuiz()" class="w-full bg-slate-800 hover:bg-slate-700 text-white text-lg font-semibold py-4 rounded-2xl transition-all shadow-md flex items-center justify-center gap-2">
+                    진단 시작하기 <i class="ph-bold ph-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <section id="screen-quiz" class="hidden flex-grow flex-col animate-slide-up py-4">
+            <div class="mb-8 px-2">
+                <div class="flex justify-between text-sm font-medium text-slate-400 mb-2">
+                    <span>진행률</span>
+                    <span id="progress-text">1 / 25</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div id="progress-bar" class="bg-pastel-primary h-2.5 rounded-full transition-all duration-500 ease-out" style="width: 4%"></div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 flex-grow flex flex-col justify-between mb-8 overflow-hidden">
+                <div id="question-content" class="transition-opacity duration-300 opacity-100 flex-grow flex flex-col">
+                    <div>
+                        <span class="inline-block px-3 py-1 bg-pastel-green text-emerald-700 rounded-full text-xs font-bold mb-6">마음 들여다보기</span>
+                        <h2 id="question-text" class="text-2xl sm:text-3xl font-bold text-slate-800 leading-snug mb-8">질문</h2>
+                    </div>
+                    <div id="options-container" class="flex flex-col gap-3 mt-auto"></div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 px-2">
+                <button onclick="app.prevQuestion()" id="btn-prev" class="hidden px-6 py-4 rounded-2xl font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">이전</button>
+                <button onclick="app.nextQuestion()" id="btn-next" disabled class="flex-grow bg-slate-800 disabled:bg-slate-300 disabled:text-slate-500 text-white text-lg font-semibold py-4 rounded-2xl transition-all shadow-sm flex items-center justify-center gap-2">
+                    다음 <i class="ph-bold ph-arrow-right"></i>
+                </button>
+            </div>
+        </section>
+
+        <section id="screen-result" class="hidden animate-fade-in py-4 pb-12">
+            <div id="capture-area" class="bg-[#F8FAFC] pb-4">
+                <div class="text-center mb-8 pt-4">
+                    <h2 class="text-xl text-slate-500 font-medium mb-2">오늘의 진단 결과</h2>
+                    <h3 class="text-3xl font-bold text-slate-800" id="result-title">결과</h3>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden mb-6 mx-1">
+                    <div id="result-feature-card" class="bg-pastel-blue p-6 flex flex-col items-center text-center transition-colors duration-500">
+                        <div id="result-feature-icon" class="text-6xl mb-4 drop-shadow-sm">🌧️</div>
+                        <p id="result-feature-subtitle" class="text-lg font-semibold text-pastel-primaryDark mb-1">현재 상태 특징</p>
+                        <p class="text-slate-700" id="result-desc">설명</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 mb-6 mx-1">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="ph-fill ph-chart-bar text-pastel-primary"></i> 내 마음의 날씨 상세 지수
+                    </h3>
+                    <div id="result-score-bars" class="space-y-4"></div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 mb-6 mx-1">
+                    <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <i class="ph-fill ph-trend-up text-pastel-primary"></i> 나의 마음 온도 변화
+                    </h3>
+                    <p class="text-sm text-slate-500 mb-6">시트에 누적 저장된 감정별 변화 추이입니다.</p>
+                    <div class="h-56 sm:h-64 w-full relative">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 mb-6 mx-1">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="ph-fill ph-calendar-star text-pastel-primary"></i> 누적 마음 요약
+                    </h3>
+                    <div class="bg-slate-50 rounded-2xl p-4 sm:p-5 flex items-center gap-4 border border-slate-100">
+                        <div id="weekly-top-icon" class="text-4xl bg-white min-w-[4rem] h-16 rounded-full flex items-center justify-center shadow-sm"></div>
+                        <div class="flex-grow">
+                            <p class="text-sm text-slate-500 mb-1">지금까지 가장 많이 느낀 감정은</p>
+                            <p class="text-xl font-bold text-slate-800">
+                                <span id="weekly-top-emotion" class="text-pastel-primaryDark"></span>
+                                <span class="text-sm text-slate-400 font-normal ml-1" id="weekly-top-score"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8 mb-6 mx-1">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 rounded-full bg-pastel-green flex items-center justify-center text-emerald-600">
+                            <i class="ph-fill ph-plant text-xl"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800">마음 충전 가이드</h3>
+                    </div>
+                    <ul class="space-y-4" id="result-solutions"></ul>
+                </div>
+
+                <div class="relative bg-slate-800 rounded-3xl p-8 sm:p-10 mb-2 text-center overflow-hidden mx-1">
+                    <div class="absolute -top-10 -left-10 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
+                    <div class="absolute -bottom-10 -right-10 w-32 h-32 bg-pastel-primary opacity-20 rounded-full blur-2xl"></div>
+                    <i class="ph-fill ph-quotes text-3xl text-slate-500 mb-4 mx-auto block"></i>
+                    <p class="text-white text-lg sm:text-xl font-medium leading-relaxed" id="result-message"></p>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3 mt-6">
+                <div class="flex gap-3 mb-2">
+                    <button onclick="app.saveImage()" class="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-base font-semibold py-4 rounded-2xl transition-colors shadow-sm flex items-center justify-center gap-2">
+                        <i class="ph-bold ph-download-simple text-xl"></i> 이미지 저장
+                    </button>
+                    <button onclick="app.copyLink()" class="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-base font-semibold py-4 rounded-2xl transition-colors shadow-sm flex items-center justify-center gap-2">
+                        <i class="ph-bold ph-link text-xl"></i> 링크 복사
+                    </button>
+                </div>
+                <button onclick="app.startQuiz()" class="w-full bg-slate-800 hover:bg-slate-700 text-white text-lg font-semibold py-4 rounded-2xl transition-all shadow-md">
+                    다시 테스트하기
+                </button>
+                <button onclick="app.goHome()" class="w-full bg-transparent hover:bg-slate-100 text-slate-500 text-base font-medium py-3 rounded-2xl transition-colors">
+                    홈으로 가기
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-white border-t border-slate-100 py-6 mt-auto">
+        <div class="max-w-2xl mx-auto px-4 text-center text-sm text-slate-400">
+            <p class="font-medium mb-1">만든이: 윤채은</p>
+            <p>&copy; 2026 윤채은. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // ... 기존 앱 구동 관련 자바스크립트 스크립트 코드 내용들이 여기에 들어갑니다 ...
+        window.app = app;
+    </script>
+</body>
+</html>
+
+    <script>
+        // 초기 로딩 해제 및 첫 화면 진입
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loading-overlay').classList.add('hidden');
+            app.showScreen('screen-auth');
+        });
+
+        const scaleOptions = ["전혀 아니다", "가끔 그렇다", "자주 그렇다", "항상 그렇다"];
+        const quizData = [
+            { id: 1, category: "우울", question: "최근 들어 슬프거나 우울한 기분이 자주 드나요?", options: scaleOptions },
+            { id: 2, category: "우울", question: "평소 좋아하던 취미나 게임조차 재미없고 흥미가 떨어지나요?", options: scaleOptions },
+            { id: 3, category: "우울", question: "나 자신이 부족하고 실망스러운 사람이라고 느껴지나요?", options: scaleOptions },
+            { id: 4, category: "우울", question: "식욕이 뚝 떨어지거나, 반대로 스트레스로 인해 너무 많이 먹게 되나요?", options: scaleOptions },
+            { id: 5, category: "우울", question: "밤에 잠을 잘 못 자거나, 아침에 일어나는 것이 너무 힘든가요?", options: scaleOptions },
+            { id: 6, category: "불안", question: "뚜렷한 이유 없이 갑자기 마음이 조마조마하고 불안해지나요?", options: scaleOptions },
+            { id: 7, category: "불안", question: "나쁜 일이 일어날 것만 같은 두려운 생각이 머릿속을 떠나지 않나요?", options: scaleOptions },
+            { id: 8, category: "불안", question: "긴장하면 심장이 심하게 뛰거나 숨쉬기가 답답해진 적이 있나요?", options: scaleOptions },
+            { id: 9, category: "불안", question: "친구들이나 선생님 앞에서 말할 때 지나치게 긴장되고 떨리나요?", options: scaleOptions },
+            { id: 10, category: "불안", question: "걱정이 너무 많아서 공부나 일상생활에 집중하기가 어렵나요?", options: scaleOptions },
+            { id: 11, category: "분노", question: "최근 들어 사소한 일에도 화를 참기 힘들고 폭발할 것 같나요?", options: scaleOptions },
+            { id: 12, category: "분노", question: "누군가 나를 조금만 건드려도 크게 화를 내거나 소리를 지르고 싶나요?", options: scaleOptions },
+            { id: 13, category: "분노", question: "화가 나면 거친 말을 하거나 물건을 던지고 싶은 충동이 드나요?", options: scaleOptions },
+            { id: 14, category: "분노", question: "가족이나 친구들에게 이유 없이 짜증 섞인 말투로 쏘아붙이게 되나요?", options: scaleOptions },
+            { id: 15, category: "분노", question: "내 마음대로 상황이 풀리지 않으면 속에서 화가 치밀어 오르나요?", options: scaleOptions },
+            { id: 16, category: "무기력", question: "아침에 눈을 뜨면 씻거나 준비하는 등 아무것도 하기 싫은가요?", options: scaleOptions },
+            { id: 17, category: "무기력", question: "공부나 해야 할 일을 알지만, 도저히 몸이 움직여지지 않나요?", options: scaleOptions },
+            { id: 18, category: "무기력", question: "'어차피 노력해도 안 될 거야'라는 생각에 쉽게 포기하게 되나요?", options: scaleOptions },
+            { id: 19, category: "무기력", question: "하루 종일 누워만 있고 싶고, 에너지가 완전히 바닥난 기분인가요?", options: scaleOptions },
+            { id: 20, category: "무기력", question: "새로운 목표를 세우거나 무언가를 시작하려는 의욕이 전혀 안 생기나요?", options: scaleOptions },
+            { id: 21, category: "짜증", question: "주변 사람들의 작은 말이나 행동에도 쉽게 예민해지고 신경질이 나나요?", options: scaleOptions },
+            { id: 22, category: "짜증", question: "평소라면 그냥 넘어갈 일인데 최근에는 유독 거슬리고 짜증이 나나요?", options: scaleOptions },
+            { id: 23, category: "짜증", question: "누가 나에게 질문을 하거나 말을 거는 것조차 귀찮고 짜증 나나요?", options: scaleOptions },
+            { id: 24, category: "짜증", question: "반복되는 일상 자체가 너무 지루하고 답답해서 짜증이 나나요?", options: scaleOptions },
+            { id: 25, category: "짜증", question: "혼자 조용히 있고 싶은데 방해받으면 참을 수 없이 짜증이 나나요?", options: scaleOptions }
+        ];
+
+        const emotionData = {
+            "안정": { title: "평온하고 맑은 마음의 날씨 ☀️", icon: "☀️", bgColor: "bg-emerald-100", textColor: "text-emerald-700", desc: "현재 마음의 상태가 전반적으로 아주 안정적입니다. 일상 속에서 소소한 행복을 잘 찾아가고 계시네요!", solutions: [{ title: "현재의 리듬 유지하기", detail: "지금의 좋은 상태를 유지하기 위해 규칙적인 생활을 계속해주세요." }, { title: "긍정 에너지 나누기", detail: "주변 친구들에게 따뜻한 말 한마디 건네보는 건 어떨까요?" }, { title: "감사 일기 쓰기", detail: "오늘 하루 감사했던 일이나 기분 좋았던 일 1가지를 짧게 적어보세요." }], message: "지금처럼 당신만의 속도로, 당신만의 길을 걸어가세요. 충분히 잘 해내고 있습니다." },
+            "우울": { title: "먹구름이 낀 마음의 날씨 ☁️", icon: "☁️", bgColor: "bg-sky-100", textColor: "text-sky-700", desc: "마음의 에너지가 많이 소진되어 슬프고 우울한 기분이 드는 상태예요. 몸이 축 처지고, 평소엔 괜찮았던 일에도 자책감이 들 수 있습니다.", solutions: [{ title: "햇빛 보며 10분 걷기", detail: "가볍게 햇볕을 쬐며 걸어보세요. 햇빛은 우울한 마음을 녹이는 마법의 비타민이랍니다." }, { title: "나만의 장점 3가지 적어보기", detail: "내가 가진 작고 소중한 장점들을 찾아 기록해보세요." }, { title: "슬픈 감정 인정하기", detail: "슬플 때는 억지로 웃지 않아도 괜찮아요. 좋아하는 음악을 들으며 마음껏 울어보는 것도 훌륭한 해소법입니다." }], message: "비가 와야 무지개를 볼 수 있는 것처럼, 지금의 우울한 시간도 분명 지나갈 거예요." },
+            "불안": { title: "바람이 거센 마음의 날씨 🌬️", icon: "🌬️", bgColor: "bg-purple-100", textColor: "text-purple-700", desc: "알 수 없는 두려움에 심장이 두근거리고 긴장된 상태예요. 걱정이 꼬리를 물고 이어져 집중하기 어려울 수 있어요.", solutions: [{ title: "4-7-8 심호흡법", detail: "4초간 숨을 들이마시고, 7초 멈춘 뒤, 8초간 천천히 내쉬어보세요." }, { title: "머릿속 걱정 노트 쓰기", detail: "나를 괴롭히는 불안한 생각들을 종이에 모두 적어보세요." }, { title: "현실에 집중하기", detail: "불안해질 때 주변에서 파란색 물건 3개 찾기 등으로 현재로 시선을 돌려보세요." }], message: "아직 일어나지 않은 일에 대한 걱정은 잠시 내려놓아도 괜찮아요. 지금 숨 쉬고 있는 나에게 집중해보세요." },
+            "분노": { title: "천둥 번개가 치는 마음 🌩️", icon: "🌩️", bgColor: "bg-rose-100", textColor: "text-rose-700", desc: "마음속에 뜨거운 불씨가 있어서 작은 일에도 쉽게 화가 폭발할 것 같은 상태예요.", solutions: [{ title: "화나는 순간, 숫자 10 세기", detail: "말이 튀어나오려 할 때, 입을 다물고 속으로 천천히 숫자 10까지 세어보세요." }, { title: "안전하게 감정 배출하기", detail: "빈 종이에 화나는 마음을 휘갈겨 적은 뒤 찢어버리거나 땀이 나는 운동을 해보세요." }, { title: "차가운 물 한 잔 마시기", detail: "속에서 열이 오를 때 시원한 물을 한 모금씩 천천히 삼켜보세요." }], message: "당신이 느끼는 화는 당연한 감정입니다. 그 불길이 나를 다치게 하지 않도록 안전하게 덜어내 보아요." },
+            "무기력": { title: "바람 한 점 없는 고요한 날 🌫️", icon: "🌫️", bgColor: "bg-slate-100", textColor: "text-slate-700", desc: "몸의 배터리가 0%로 방전된 것처럼 에너지가 없는 상태예요. 도저히 몸이 움직이지 않아 답답할 수 있습니다.", solutions: [{ title: "아주 작은 목표 1개 달성하기", detail: "책상 위 쓰레기 버리기 등 '실패할 수 없을 만큼' 작은 행동을 시작해보세요." }, { title: "완벽주의 내려놓기", detail: "100점이 아니어도 괜찮아요. 오늘 하루 무사히 보낸 것만으로 대단합니다." }, { title: "생각 비우고 멍때리기", detail: "억지로 무언가를 하려 하지 말고, 좋아하는 영상을 보며 아무 생각 없이 쉬어보세요." }], message: "에너지가 없을 때는 억지로 달릴 필요 없어요. 가만히 쉬어가는 것도 훌륭한 충전 방법입니다." },
+            "짜증": { title: "건조하고 까슬까슬한 날씨 🏜️", icon: "🏜️", bgColor: "bg-orange-100", textColor: "text-orange-700", desc: "마음의 여유 공간이 좁아져 외부의 작은 자극에도 쉽게 예민해지는 상태예요. 조용히 혼자 있고 싶어집니다.", solutions: [{ title: "디지털 디톡스 하기", detail: "스마트폰 알림이 짜증을 더할 수 있어요. 자기 전 1시간은 폰을 멀리해보세요." }, { title: "나만의 동굴 시간 갖기", detail: "가족이나 친구들에게 정중하게 혼자 쉴 시간이 필요하다고 말해보세요." }, { title: "푹신한 것 끌어안기", detail: "부드러운 담요나 애착 인형을 끌어안고 마음을 진정시켜 보세요." }], message: "뾰족하게 가시를 세우고 있는 고슴도치도 따뜻한 품이 그립답니다. 내 마음을 먼저 부드럽게 토닥여주세요." }
+        };
+
+        const comfortMessages = [
+            "비가 와야 무지개를 볼 수 있는 것처럼, 지금의 힘든 시간도 지나갈 거예요.",
+            "매일 완벽하지 않아도 괜찮아요. 오늘은 그저 하루를 무사히 보낸 것만으로도 충분해요.",
+            "당신은 생각보다 훨씬 강하고 멋진 사람입니다. 스스로를 믿어주세요."
+        ];
+
+        const app = {
+            authMode: 'login',
+            currentUserProfile: null, // { id, name }
+            currentQuestionIndex: 0,
+            answers: [],
+            shuffledQuizData: [],
+            isAnimating: false,
+            trendChartInstance: null,
+
+            showScreen: function(screenId) {
+                document.querySelectorAll('section').forEach(el => { el.classList.add('hidden'); el.style.display = 'none'; });
+                const target = document.getElementById(screenId);
+                target.classList.remove('hidden');
+                target.style.display = 'flex';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+
+            showToast: function(message) {
+                const toast = document.getElementById('toast-container');
+                document.getElementById('toast-message').innerText = message;
+                toast.classList.remove('hidden', 'animate-toast');
+                void toast.offsetWidth; 
+                toast.classList.add('animate-toast');
+                toast.style.display = 'block';
+                setTimeout(() => { toast.style.display = 'none'; toast.classList.remove('animate-toast'); }, 3000);
+            },
+
+            setAuthMode: function(mode) {
+                this.authMode = mode;
+                const tabLogin = document.getElementById('tab-login');
+                const tabSignup = document.getElementById('tab-signup');
+                const fieldName = document.getElementById('field-name');
+                const btnSubmit = document.getElementById('btn-auth-submit');
+
+                if (mode === 'login') {
+                    tabLogin.className = "flex-1 pb-3 text-center font-bold text-pastel-primary border-b-2 border-pastel-primary transition-colors";
+                    tabSignup.className = "flex-1 pb-3 text-center font-medium text-slate-400 border-b-2 border-transparent transition-colors";
+                    fieldName.classList.add('hidden');
+                    btnSubmit.innerText = "로그인하기";
+                } else {
+                    tabSignup.className = "flex-1 pb-3 text-center font-bold text-pastel-primary border-b-2 border-pastel-primary transition-colors";
+                    tabLogin.className = "flex-1 pb-3 text-center font-medium text-slate-400 border-b-2 border-transparent transition-colors";
+                    fieldName.classList.remove('hidden');
+                    btnSubmit.innerText = "가입하고 시작하기";
+                }
+            },
+
+            submitAuth: async function() {
+                const id = document.getElementById('auth-id').value.trim();
+                const pw = document.getElementById('auth-pw').value.trim();
+                const name = document.getElementById('auth-name').value.trim();
+
+                if (!id || !pw) return this.showToast("아이디와 비밀번호를 모두 입력해주세요.");
+                if (this.authMode === 'signup' && !name) return this.showToast("이름을 입력해주세요.");
+
+                document.getElementById('loading-overlay').classList.remove('hidden');
+
+                try {
+                    const response = await fetch(GAS_USER_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: this.authMode, id: id, pw: pw, name: name })
+                    });
+                    const result = await response.json();
+
+                    if (result.status === "SUCCESS") {
+                        this.showToast(this.authMode === 'signup' ? `${name}님 환영합니다!` : "로그인 성공!");
+                        this.loginSuccess({ id: id, name: this.authMode === 'signup' ? name : result.name });
+                    } else if (result.message === "ALREADY_EXISTS") {
+                        this.showToast("이미 등록된 아이디입니다. 로그인해 주세요.");
+                        this.setAuthMode('login');
+                    } else if (result.message === "INVALID_CREDENTIALS") {
+                        this.showToast("아이디 혹은 비밀번호가 틀렸습니다.");
+                    } else {
+                        this.showToast("처리 중 오류가 발생했습니다.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    this.showToast("네트워크 연결을 확인해주세요.");
+                } finally {
+                    document.getElementById('loading-overlay').classList.add('hidden');
+                }
+            },
+
+            loginSuccess: function(profileData) {
+                this.currentUserProfile = profileData;
+                document.getElementById('nav-user-name').innerText = `${profileData.name}님`;
+                document.getElementById('nav-user-name').classList.remove('hidden');
+                document.getElementById('btn-logout').classList.remove('hidden');
+                document.getElementById('display-user-name').innerText = profileData.name;
+                this.goHome();
+            },
+
+            logout: function() {
+                this.currentUserProfile = null;
+                document.getElementById('nav-user-name').classList.add('hidden');
+                document.getElementById('btn-logout').classList.add('hidden');
+                this.showScreen('screen-auth');
+            },
+
+            goHome: function() {
+                if(!this.currentUserProfile) return this.showScreen('screen-auth');
+                this.showScreen('screen-main');
+            },
+
+            startQuiz: function() {
+                this.currentQuestionIndex = 0;
+                this.answers = new Array(quizData.length).fill(null);
+                this.shuffledQuizData = [...quizData];
+                this.renderQuestion();
+                this.showScreen('screen-quiz');
+            },
+
+            renderQuestion: function(withAnimation = false) {
+                const updateUI = () => {
+                    const q = this.shuffledQuizData[this.currentQuestionIndex];
+                    document.getElementById('progress-text').innerText = `${this.currentQuestionIndex + 1} / ${this.shuffledQuizData.length}`;
+                    document.getElementById('progress-bar').style.width = `${((this.currentQuestionIndex + 1) / this.shuffledQuizData.length) * 100}%`;
+                    document.getElementById('question-text').innerText = q.question;
+                    document.getElementById('btn-prev').classList.toggle('hidden', this.currentQuestionIndex === 0);
+                    
+                    const btnNext = document.getElementById('btn-next');
+                    btnNext.innerHTML = this.currentQuestionIndex === this.shuffledQuizData.length - 1 ? '결과 분석하기 <i class="ph-bold ph-check"></i>' : '다음 <i class="ph-bold ph-arrow-right"></i>';
+                    
+                    const container = document.getElementById('options-container');
+                    container.innerHTML = '';
+                    q.options.forEach((optText, index) => {
+                        const isChecked = this.answers[this.currentQuestionIndex] === index;
+                        const label = document.createElement('label');
+                        label.className = 'relative cursor-pointer group block';
+                        label.innerHTML = `
+                            <input type="radio" name="answer" value="${index}" class="option-radio sr-only" ${isChecked ? 'checked' : ''} onchange="app.selectOption(${index})">
+                            <div class="border-2 border-slate-100 rounded-2xl p-4 sm:p-5 transition-all duration-200 flex items-center justify-between group-hover:border-pastel-primary group-hover:bg-slate-50">
+                                <span class="text-slate-700 text-lg">${optText}</span>
+                                <div class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center check-icon transition-colors">
+                                    <div class="w-3 h-3 bg-pastel-primary rounded-full opacity-0 transition-opacity"></div>
+                                </div>
+                            </div>
+                        `;
+                        container.appendChild(label);
+                    });
+                    this.updateNextButtonState();
+                    this.updateRadioStyles();
+                    if (withAnimation) document.getElementById('question-content').classList.remove('opacity-0');
+                    this.isAnimating = false;
+                };
+
+                if (withAnimation) {
+                    this.isAnimating = true;
+                    document.getElementById('question-content').classList.add('opacity-0');
+                    setTimeout(updateUI, 300);
+                } else { updateUI(); }
+            },
+
+            updateRadioStyles: function() {
+                document.querySelectorAll('.option-radio').forEach(radio => {
+                    const checkIconInner = radio.nextElementSibling.querySelector('.check-icon div');
+                    const checkIconOuter = radio.nextElementSibling.querySelector('.check-icon');
+                    if (radio.checked) {
+                        checkIconInner.classList.remove('opacity-0');
+                        checkIconOuter.classList.replace('border-slate-300', 'border-pastel-primary');
+                    } else {
+                        checkIconInner.classList.add('opacity-0');
+                        checkIconOuter.classList.replace('border-pastel-primary', 'border-slate-300');
+                    }
+                });
+            },
+
+            selectOption: function(val) {
+                this.answers[this.currentQuestionIndex] = val;
+                this.updateNextButtonState();
+                this.updateRadioStyles();
+            },
+
+            updateNextButtonState: function() {
+                document.getElementById('btn-next').disabled = this.answers[this.currentQuestionIndex] === null;
+            },
+
+            prevQuestion: function() {
+                if (this.isAnimating) return;
+                if (this.currentQuestionIndex > 0) { this.currentQuestionIndex--; this.renderQuestion(true); }
+            },
+
+            nextQuestion: function() {
+                if (this.isAnimating) return;
+                if (this.currentQuestionIndex < this.shuffledQuizData.length - 1) { this.currentQuestionIndex++; this.renderQuestion(true); } 
+                else { this.processAndSaveResult(); }
+            },
+
+            processAndSaveResult: async function() {
+                if(!this.currentUserProfile) return;
+                document.getElementById('loading-overlay').classList.remove('hidden');
+                
+                const categoryScores = { "우울": 0, "불안": 0, "분노": 0, "무기력": 0, "짜증": 0 };
+                this.answers.forEach((score, index) => {
+                    const category = this.shuffledQuizData[index].category;
+                    categoryScores[category] += score;
+                });
+
+                let maxCategory = "";
+                let maxScore = -1;
+                let totalScore = 0;
+                for (const [category, score] of Object.entries(categoryScores)) {
+                    totalScore += score;
+                    if (score > maxScore) { maxScore = score; maxCategory = category; }
+                }
+
+                try {
+                    // 두 번째 시트 API 호출 (결과 데이터 저장 및 이력 수신)
+                    const response = await fetch(GAS_RESULT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveResult',
+                            id: this.currentUserProfile.id,
+                            scores: categoryScores
+                        })
+                    });
+                    const result = await response.json();
+
+                    if(result.status === "SUCCESS") {
+                        this.renderResultScreen(categoryScores, maxCategory, maxScore, totalScore, result.history);
+                    } else {
+                        this.showToast("결과 저장 도중 통신 오류가 발생했습니다.");
+                    }
+                } catch(err) {
+                    console.error(err);
+                    this.showToast("구글 시트 연동 실패. 오프라인 모드로 결과를 노출합니다.");
+                    this.renderResultScreen(categoryScores, maxCategory, maxScore, totalScore, []);
+                } finally {
+                    document.getElementById('loading-overlay').classList.add('hidden');
+                }
+            },
+
+            renderResultScreen: function(categoryScores, maxCategory, maxScore, totalScore, historyRecords) {
+                let targetEmotion = maxCategory;
+                if (maxScore <= 3 && totalScore <= 10) targetEmotion = "안정";
+
+                let scoreBarsHTML = "";
+                const colors = { "우울": "bg-blue-400", "불안": "bg-purple-400", "분노": "bg-rose-400", "무기력": "bg-slate-400", "짜증": "bg-orange-400" };
+
+                for (const [category, score] of Object.entries(categoryScores)) {
+                    const percentage = Math.round((score / 15) * 100);
+                    scoreBarsHTML += `
+                        <div>
+                            <div class="flex justify-between text-sm font-medium text-slate-600 mb-1.5">
+                                <span>${category}</span><span>${score}점 <span class="text-xs text-slate-400 font-normal">/ 15점</span></span>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div class="${colors[category]} h-full rounded-full transition-all duration-1000 ease-out" style="width: 0%" data-target-width="${percentage}%"></div>
+                            </div>
+                        </div>`;
+                }
+                document.getElementById('result-score-bars').innerHTML = scoreBarsHTML;
+
+                setTimeout(() => {
+                    document.querySelectorAll('#result-score-bars [data-target-width]').forEach(bar => {
+                        bar.style.width = bar.getAttribute('data-target-width');
+                    });
+                }, 100);
+
+                // Chart 렌더링
+                const categories = ["우울", "분노", "불안", "무기력", "짜증"];
+                const chartColorsHex = { "우울": "#60A5FA", "분노": "#FB7185", "불안": "#C084FC", "무기력": "#94A3B8", "짜증": "#FB923C" };
+                
+                const chartLabels = historyRecords.map(r => r.dateStr);
+                const datasets = categories.map(cat => {
+                    return {
+                        label: cat,
+                        data: historyRecords.map(r => r.scores[cat] || 0),
+                        borderColor: chartColorsHex[cat],
+                        backgroundColor: chartColorsHex[cat],
+                        tension: 0.4, borderWidth: 2, pointRadius: 3
+                    };
+                });
+
+                const ctx = document.getElementById('trendChart').getContext('2d');
+                if (this.trendChartInstance) this.trendChartInstance.destroy();
+                this.trendChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: chartLabels.length ? chartLabels : ["오늘"], datasets: datasets.length ? datasets : [] },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        scales: { y: { min: 0, max: 15 } }
+                    }
+                });
+
+                const content = emotionData[targetEmotion];
+                let solutionsHTML = "";
+                content.solutions.forEach(sol => {
+                    solutionsHTML += `<li class="flex items-start gap-3"><i class="ph-bold ph-check-circle text-emerald-500 mt-1 text-lg"></i><div><strong class="block text-slate-700">${sol.title}</strong><span class="text-sm text-slate-500">${sol.detail}</span></div></li>`;
+                });
+
+                document.getElementById('weekly-top-emotion').innerText = targetEmotion;
+                document.getElementById('weekly-top-icon').innerText = content.icon;
+                document.getElementById('result-feature-card').className = `p-6 flex flex-col items-center text-center transition-colors duration-500 ${content.bgColor}`;
+                document.getElementById('result-feature-icon').innerText = content.icon;
+                document.getElementById('result-feature-subtitle').className = `text-lg font-semibold mb-1 ${content.textColor}`;
+                document.getElementById('result-title').innerText = content.title;
+                document.getElementById('result-desc').innerHTML = content.desc;
+                document.getElementById('result-solutions').innerHTML = solutionsHTML;
+                document.getElementById('result-message').innerText = `"${comfortMessages[Math.floor(Math.random() * comfortMessages.length)]}"`;
+
+                this.showScreen('screen-result');
+            },
+
+            saveImage: function() {
+                this.showToast("이미지를 저장하는 중입니다...");
+                html2canvas(document.getElementById('capture-area'), { scale: 2, backgroundColor: '#F8FAFC', useCORS: true }).then(canvas => {
+                    const link = document.createElement('a'); link.download = '마음쉼표_진단결과.png'; link.href = canvas.toDataURL('image/png'); link.click();
+                });
+            },
+
+            copyLink: function() {
+                const dummy = document.createElement('input'); document.body.appendChild(dummy); dummy.value = window.location.href; dummy.select(); document.execCommand('copy'); document.body.removeChild(dummy);
+                this.showToast("결과 링크가 복사되었습니다!");
+            }
+        };
+
+        window.app = app;
+    </script>
+</body>
+</html>
